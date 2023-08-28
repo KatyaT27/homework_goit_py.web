@@ -1,5 +1,8 @@
 import asyncio
+import aiohttp
 import websockets
+
+from currency_rates_console import CurrencyAPI
 
 
 class CurrencyChat:
