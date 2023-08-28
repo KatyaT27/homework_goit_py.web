@@ -1,6 +1,6 @@
 import argparse
-import asyncio
 import aiohttp
+import asyncio
 from datetime import datetime, timedelta
 
 
@@ -8,51 +8,42 @@ class CurrencyAPI:
     def __init__(self):
         self.base_url = "https://api.privatbank.ua/p24api/exchange_rates"
 
-    async def fetch_url(self, url):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    response.raise_for_status()
-                    return await response.json()
-        except aiohttp.ClientError as e:
-            print(f"An error occurred: {e}")
-            return None
+    async def fetch_exchange_rates(self, date):
+        url = f"{self.base_url}?date={date}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                response_data = await response.json()
+                return response_data.get('exchangeRate', [])
 
-    async def get_exchange_rates(self, days):
-        today = datetime.now()
-        for day in range(days):
-            date = (today - timedelta(days=day)).strftime('%d.%m.%Y')
-            url = f"{self.base_url}?date={date}"
-            response_data = await self.fetch_url(url)
-
-            if response_data is not None:
-                self.parse_responses(response_data, date)
-
-    def parse_responses(self, response_data, date):
-        exchange_rates = response_data.get('exchangeRate', [])
-        rates = {'date': date}
+    async def get_currency_rates(self, date, currencies):
+        exchange_rates = await self.fetch_exchange_rates(date)
+        rates = {}
 
         for rate in exchange_rates:
-            currency = rate.get('currency', '')
-            sale_rate = rate.get('saleRate', rate.get('saleRateNB', 'N/A'))
-            purchase_rate = rate.get(
-                'purchaseRate', rate.get('purchaseRateNB', 'N/A'))
-            rates[currency] = {'sale': sale_rate, 'purchase': purchase_rate}
+            currency = rate.get('currency')
+            if currency in currencies:
+                rates[currency] = {
+                    'sale': rate.get('saleRate'),
+                    'purchase': rate.get('purchaseRate')
+                }
 
-        print(rates)
+        return rates
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(
         description="Fetch currency exchange rates")
-    parser.add_argument("days", type=int, help="Number of days")
+    parser.add_argument("date", type=str, help="Date in the format DD.MM.YYYY")
     args = parser.parse_args()
 
-    print("Days:", args.days)
-
+    date = datetime.strptime(args.date, '%d.%m.%Y')
     api = CurrencyAPI()
-    asyncio.run(api.get_exchange_rates(args.days))
+    currencies = ['EUR', 'USD']  # Add more currencies if needed
+    rates = await api.get_currency_rates(date.strftime('%d.%m.%Y'), currencies)
 
+    for currency, rate_info in rates.items():
+        print(
+            f"{currency}: Sale - {rate_info['sale']}, Purchase - {rate_info['purchase']}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
